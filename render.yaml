@@ -1,0 +1,25 @@
+# Render Blueprint — deploys a public HTTPS web service from this repo.
+# After deploy, set LINKEDIN_LI_AT and LINKEDIN_JSESSIONID in the Render dashboard.
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: linkedin-browserless
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: LINKEDIN_LI_AT
+        sync: false
+      - key: LINKEDIN_JSESSIONID
+        sync: false
+      - key: API_KEY
+        generateValue: true
+      - key: SESSION_STATE_PATH
+        value: /tmp/session_state.json
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MAX_CONCURRENT_SCRAPES
+        value: "2"
+      - key: CACHE_TTL_SECONDS
+        value: "3600"
