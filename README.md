@@ -51,6 +51,87 @@ curl -X POST http://127.0.0.1:8000/api/v1/profile \
 | `GET /health` | Liveness check |
 | `GET /health/session` | LinkedIn session status (no secrets returned) |
 
+### Example response
+
+Sample output from `POST /api/v1/profile` (redacted fixture data; live fields vary by profile):
+
+<details>
+<summary>JSON</summary>
+
+```json
+{
+  "source_url": "https://www.linkedin.com/in/jordan-rivera",
+  "profile_id": "ACoAAREDAC0000000001",
+  "name": "Jordan Rivera",
+  "headline": "Senior Software Engineer at Acme Corp",
+  "location": "San Francisco, California, United States",
+  "about": "Builder of data products at & scale.",
+  "images": {
+    "profile_picture": {
+      "primary": "https://media.licdn.com/dms/image/v2/photo800/800_800/0/redacted-profile",
+      "renditions": {
+        "100": "https://media.licdn.com/dms/image/v2/photo100/100_100/0/redacted-profile",
+        "800": "https://media.licdn.com/dms/image/v2/photo800/800_800/0/redacted-profile"
+      }
+    },
+    "background_image": null
+  },
+  "experience": [
+    {
+      "title": "Senior Software Engineer",
+      "company": "Acme Corp",
+      "company_url": "https://www.linkedin.com/company/acme-corp/",
+      "start_date": "Jul 2025",
+      "end_date": null,
+      "duration": "1 yr 1 mo"
+    },
+    {
+      "title": "Software Developer",
+      "company": "Legacy Industries",
+      "start_date": "Jan 2023",
+      "end_date": "Jun 2025",
+      "duration": "2 yrs 6 mos"
+    }
+  ],
+  "education": [
+    {
+      "school": "Example University",
+      "degree": "B.S.",
+      "field_of_study": "Computer Science"
+    }
+  ],
+  "skills": ["Python"],
+  "certifications": [
+    {
+      "name": "Cloud Practitioner",
+      "issuing_organization": "Example Academy",
+      "issue_date": "Dec 2023",
+      "credential_id": "ABC123"
+    }
+  ],
+  "languages": [
+    {
+      "name": "English",
+      "proficiency": "Native or bilingual"
+    }
+  ],
+  "partial": false,
+  "section_status": {
+    "about": "ok",
+    "experience": "ok",
+    "education": "ok",
+    "skills": "ok",
+    "certifications": "ok",
+    "languages": "ok"
+  },
+  "scraped_at": "2026-08-29T08:00:00Z"
+}
+```
+
+</details>
+
+The response also includes `field_sources`, `data_tiers`, and `section_status` so callers can see which LinkedIn tier supplied each field.
+
 ## How it works
 
 LinkedIn loads profiles in two tiers:
