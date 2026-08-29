@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     # --- API ---
     api_key: Optional[str] = Field(default=None, alias="API_KEY")
+    enable_docs: bool = Field(default=False, alias="ENABLE_DOCS")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     include_debug: bool = Field(default=False, alias="INCLUDE_DEBUG")
 
