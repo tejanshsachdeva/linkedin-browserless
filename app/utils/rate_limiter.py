@@ -4,15 +4,11 @@ from contextlib import asynccontextmanager
 
 class ScrapeThrottle:
     """
-    Bounds how many browser scrape operations run concurrently against
-    the *same* LinkedIn session.
+    Bounds how many profile scrape operations run concurrently against
+    the same LinkedIn session.
 
-    This exists for two reasons:
-      1. LinkedIn is far more likely to flag a session that fires many
-         parallel requests than one that works through a queue.
-      2. A single Playwright browser instance can only sanely drive a
-         handful of concurrent pages before memory/CPU on a small host
-         becomes the bottleneck anyway.
+    LinkedIn is far more likely to flag a session that fires many parallel
+    HTTP requests than one that works through a queue.
     """
 
     def __init__(self, max_concurrent: int):

@@ -58,7 +58,7 @@ class ProfileService:
             top_card = parse_top_card(html)
             descriptors = parse_rehydration(html)
 
-            sections = await self._fetch_detail_sections(vanity)
+            sections = await self._fetch_detail_sections(vanity, html=html)
 
             profile = assemble(
                 top_card,
@@ -77,7 +77,7 @@ class ProfileService:
         await self._cache.set(cache_key, profile.model_dump_json(), self._cache_ttl_seconds)
         return profile
 
-    async def _fetch_detail_sections(self, vanity: str) -> dict[str, object]:
+    async def _fetch_detail_sections(self, vanity: str, *, html: str) -> dict[str, object]:
         async with self._section_sem:
             if self._section_fetch_delay_ms > 0:
                 jitter = random.uniform(0.5, 1.5)
@@ -93,7 +93,7 @@ class ProfileService:
             }
 
             try:
-                payload = await self._client.fetch_voyager_profile_sections(vanity)
+                payload = await self._client.fetch_voyager_profile_sections(vanity, html=html)
                 parsed = parse_voyager_profile(payload)
 
                 section_status["about"] = (

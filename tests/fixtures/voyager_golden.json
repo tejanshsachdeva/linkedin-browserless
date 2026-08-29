@@ -1,0 +1,49 @@
+{
+  "included": [
+    {
+      "entityUrn": "urn:li:fsd_profile:ACoAAREDAC0000000001",
+      "summary": "Builder of data products at &amp; scale."
+    },
+    {
+      "entityUrn": "urn:li:fsd_profilePosition:1",
+      "title": "Senior Software Engineer",
+      "companyName": "Acme Corp",
+      "companyUrl": "https://www.linkedin.com/company/acme-corp/",
+      "dateRange": {
+        "start": { "month": 7, "year": 2025 }
+      }
+    },
+    {
+      "entityUrn": "urn:li:fsd_profilePosition:2",
+      "title": "Software Developer",
+      "companyName": "Legacy Industries",
+      "dateRange": {
+        "start": { "month": 1, "year": 2023 },
+        "end": { "month": 6, "year": 2025 }
+      }
+    },
+    {
+      "entityUrn": "urn:li:fsd_profileEducation:1",
+      "schoolName": "Example University",
+      "degreeName": "B.S.",
+      "fieldOfStudy": "Computer Science"
+    },
+    {
+      "entityUrn": "urn:li:fsd_skill:1",
+      "name": "Python"
+    },
+    {
+      "entityUrn": "urn:li:fsd_profileCertification:(ACoAAREDAC0000000001,1)",
+      "name": "Cloud Practitioner",
+      "authority": "Example Academy",
+      "dateRange": { "start": { "month": 12, "year": 2023 } },
+      "licenseNumber": "ABC123",
+      "url": "https://example.org/credentials/abc123"
+    },
+    {
+      "entityUrn": "urn:li:fsd_profileLanguage:(ACoAAREDAC0000000001,1)",
+      "name": "English",
+      "proficiency": "NATIVE_OR_BILINGUAL"
+    }
+  ]
+}

@@ -81,9 +81,25 @@ class LinkedInSession:
         for cookie in response.cookies.jar:
             self._cookies[cookie.name] = cookie.value
 
+    @staticmethod
+    def should_persist_response(response: httpx.Response) -> bool:
+        if response.status_code in (401, 403, 429, 999):
+            return False
+        if response.status_code >= 400:
+            return False
+        body_lower = response.text.lower()
+        if "authwall" in body_lower and len(response.text) < 20_000:
+            return False
+        return True
+
+    def apply_response_cookies(self, response: httpx.Response) -> None:
+        """Update cookies from a response and persist only on successful responses."""
+        self.update_cookies_from_response(response)
+        if self.should_persist_response(response):
+            self.persist()
+
     def build_client(self) -> httpx.AsyncClient:
         headers = build_html_get_headers(user_agent=self._settings.user_agent)
-        headers["csrf-token"] = self.csrf_token
 
         return httpx.AsyncClient(
             base_url="https://www.linkedin.com",
@@ -92,6 +108,22 @@ class LinkedInSession:
             timeout=self._settings.request_timeout_seconds,
             follow_redirects=True,
         )
+
+    async def probe(self) -> dict[str, Any]:
+        """Lightweight auth check against LinkedIn feed."""
+        async with self.build_client() as client:
+            response = await client.get("/feed/")
+            body_lower = response.text.lower()
+            ok = (
+                response.status_code == 200
+                and "authwall" not in body_lower
+                and "login-form" not in body_lower
+            )
+            return {
+                "ok": ok,
+                "status_code": response.status_code,
+                **self.to_debug_dict(),
+            }
 
     def get_cookie(self, name: str) -> Optional[str]:
         return self._cookies.get(name)

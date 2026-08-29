@@ -168,3 +168,16 @@ def test_open_to_work_extracts_visible_banner():
     assert data.open_to_work is not None
     assert data.open_to_work.headline == "Open to work"
     assert "Software Engineer" in (data.open_to_work.detail or "")
+
+
+def test_headline_skips_premium_upsell():
+    html = """
+    <html><head><title>Priyanshu Agarwal | LinkedIn</title></head><body>
+      <h1>Priyanshu Agarwal</h1>
+      <p>Try Premium for ₹0</p>
+      <p>Software Engineer at Example Corp</p>
+      <p>Bengaluru, Karnataka, India</p>
+    </body></html>
+    """
+    data = parse_top_card(html)
+    assert data.headline == "Software Engineer at Example Corp"

@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup, Tag
 
 from app.models.schemas import ImageRenditions, OpenToWork
 from app.parsing import selectors as sel
+from app.parsing.connection_degree import parse_connection_degree_from_html
 
 
 @dataclass
@@ -44,6 +45,8 @@ def parse_top_card(html: str) -> TopCardData:
     data.location = _extract_location(soup, paragraphs)
     data.pronouns = _extract_pronouns(paragraphs)
     data.connection_degree = _extract_connection_degree(paragraphs)
+    if not data.connection_degree:
+        data.connection_degree = parse_connection_degree_from_html(html)
     data.connections_count = _extract_connections_count(soup)
     data.current_company, data.current_school = _extract_entity_rows(soup)
     if data.headline:
@@ -102,6 +105,8 @@ def _extract_headline(paragraphs: list[str], name: Optional[str]) -> Optional[st
         if text.lower() == sel.CONNECTIONS_TEXT:
             continue
         if sel.CONTACT_INFO_TEXT.lower() in text.lower():
+            continue
+        if sel.HEADLINE_SKIP_RE.match(text):
             continue
         if len(text) > 10 and not text.startswith("·"):
             return text

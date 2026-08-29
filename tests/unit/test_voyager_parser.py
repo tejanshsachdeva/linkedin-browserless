@@ -1,6 +1,6 @@
 """Unit tests for voyager_parser."""
 
-from app.parsing.voyager_parser import parse_voyager_profile
+from app.parsing.voyager_parser import parse_voyager_profile, voyager_payload_is_usable
 
 MINIMAL_VOYAGER_PAYLOAD = {
     "included": [
@@ -12,9 +12,21 @@ MINIMAL_VOYAGER_PAYLOAD = {
             "entityUrn": "urn:li:fsd_profilePosition:1",
             "title": "Senior Engineer",
             "companyName": "Acme Corp",
+            "*company": "urn:li:fsd_company:1",
+            "*employmentType": "urn:li:fsd_employmentType:1",
             "dateRange": {
                 "start": {"month": 7, "year": 2025},
             },
+        },
+        {
+            "entityUrn": "urn:li:fsd_company:1",
+            "name": "Acme Corp",
+            "url": "https://www.linkedin.com/company/acme-corp/",
+            "universalName": "acme-corp",
+        },
+        {
+            "entityUrn": "urn:li:fsd_employmentType:1",
+            "name": "Full-time",
         },
         {
             "entityUrn": "urn:li:fsd_profilePosition:2",
@@ -59,6 +71,9 @@ def test_parse_full_voyager_profile():
     assert len(parsed["experience"]) == 2
     assert parsed["experience"][0].title == "Senior Engineer"
     assert parsed["experience"][0].end_date is None
+    assert parsed["experience"][0].company_url == "https://www.linkedin.com/company/acme-corp/"
+    assert parsed["experience"][0].employment_type == "Full-time"
+    assert parsed["experience"][0].duration is not None
     assert len(parsed["education"]) == 1
     assert parsed["skills"] == ["Python"]
     assert len(parsed["certifications"]) == 1
@@ -74,3 +89,9 @@ def test_experience_sorted_with_current_role_first():
     parsed = parse_voyager_profile(MINIMAL_VOYAGER_PAYLOAD)
     assert parsed["experience"][0].company == "Acme Corp"
     assert parsed["experience"][1].end_date == "Jun 2025"
+
+
+def test_voyager_payload_is_usable():
+    assert voyager_payload_is_usable(MINIMAL_VOYAGER_PAYLOAD) is True
+    assert voyager_payload_is_usable({"included": []}) is False
+    assert voyager_payload_is_usable({"included": [{"entityUrn": "urn:li:other:1"}]}) is False

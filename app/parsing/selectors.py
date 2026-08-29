@@ -52,6 +52,11 @@ CONNECTIONS_COUNT_RE = re.compile(r"^\d+\+?$")
 CONNECTIONS_INLINE_RE = re.compile(r"^(\d+\+?)\s+connections$", re.IGNORECASE)
 HEADLINE_COMPANY_RE = re.compile(r"@\s*([^|]+?)(?:\s*\||$)")
 HEADLINE_COMPANY_AT_RE = re.compile(r"\bat\s+([^|]+?)(?:\s*\||$)", re.IGNORECASE)
+HEADLINE_SKIP_RE = re.compile(
+    r"^(try premium|linkedin premium|upgrade to premium|subscribe to premium|"
+    r"premium for\b|get premium\b|reactivate premium)",
+    re.IGNORECASE,
+)
 PROFILE_ID_RE = re.compile(r"ACoAA[A-Za-z0-9_-]+")
 MEMBER_URN_RE = re.compile(r"urn:li:member:\d+")
 

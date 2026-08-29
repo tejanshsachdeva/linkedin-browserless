@@ -8,10 +8,10 @@ fetched via Voyager REST with the FullProfileWithEntities decoration.
 
 from __future__ import annotations
 
-# Voyager decoration that includes positions, education, skills in `included[]`.
-VOYAGER_FULL_PROFILE_DECORATION = (
-    "com.linkedin.voyager.dash.deco.identity.profile.FullProfileWithEntities-76"
-)
+from app.parsing.decoration_discovery import decoration_id
+
+# Default when discovery and fallbacks are unavailable (tests, legacy callers).
+VOYAGER_FULL_PROFILE_DECORATION = decoration_id(76)
 
 VOYAGER_PROFILE_PATH = "/voyager/api/identity/dash/profiles"
 
@@ -33,9 +33,10 @@ def component_section(component_id: str) -> str | None:
     return COMPONENT_SECTION_MAP.get(suffix)
 
 
-def voyager_profile_url(vanity: str) -> str:
+def voyager_profile_url(vanity: str, *, profile_decoration: str | None = None) -> str:
+    decoration = profile_decoration or VOYAGER_FULL_PROFILE_DECORATION
     return (
         f"{VOYAGER_PROFILE_PATH}"
         f"?q=memberIdentity&memberIdentity={vanity}"
-        f"&decorationId={VOYAGER_FULL_PROFILE_DECORATION}"
+        f"&decorationId={decoration}"
     )

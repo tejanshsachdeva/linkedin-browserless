@@ -101,10 +101,15 @@ class ProfileResponse(BaseModel):
     certifications: List[CertificationItem] = Field(default_factory=list)
     languages: List[LanguageItem] = Field(default_factory=list)
     scraped_at: datetime
-    partial: bool = False
-    missing_sections: List[str] = Field(default_factory=list)
+    partial: bool = False  # True only when a section fetch failed or was not implemented
+    missing_sections: List[str] = Field(
+        default_factory=list,
+        description="Sections with fetch_failed or not_implemented status (excludes not_present).",
+    )
     section_status: Dict[str, SectionStatus] = Field(default_factory=dict)
     data_tiers: Dict[str, str] = Field(default_factory=dict)
+    field_sources: Dict[str, str] = Field(default_factory=dict)
+    field_conflicts: List[str] = Field(default_factory=list)
     sdui_descriptors: Optional[List[AsyncSectionDescriptor]] = None
 
 
