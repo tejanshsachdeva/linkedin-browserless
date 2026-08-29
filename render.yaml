@@ -1,0 +1,29 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Set secrets in the Render dashboard (not in this file):
+#   LINKEDIN_LI_AT, LINKEDIN_JSESSIONID, API_KEY
+#
+# API_KEY: set manually to any string you choose; share it privately with testers
+# alongside your service URL. Render will not overwrite it (sync: false).
+
+services:
+  - type: web
+    name: linkedin-browserless
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: LINKEDIN_LI_AT
+        sync: false
+      - key: LINKEDIN_JSESSIONID
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: SESSION_STATE_PATH
+        value: /tmp/session_state.json
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MAX_CONCURRENT_SCRAPES
+        value: "2"
+      - key: CACHE_TTL_SECONDS
+        value: "3600"

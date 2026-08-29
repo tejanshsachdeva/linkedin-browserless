@@ -35,7 +35,14 @@ curl -X POST http://127.0.0.1:8000/api/v1/profile \
   -d '{"url": "https://www.linkedin.com/in/<vanity>"}'
 ```
 
-Add `?refresh=true` to bypass cache. Set `API_KEY` in `.env` to require an `X-API-Key` header.
+Add `?refresh=true` to bypass cache. When `API_KEY` is set, send header `X-API-Key: <your-key>` on every profile request (`/docs` is disabled).
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/profile \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-secret-key" \
+  -d '{"url": "https://www.linkedin.com/in/<vanity>"}'
+```
 
 | Endpoint | Description |
 |----------|-------------|
