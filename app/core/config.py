@@ -27,13 +27,34 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = Field(default=3600, alias="CACHE_TTL_SECONDS")
     redis_url: Optional[str] = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
 
+    # --- Corporate network (optional) ---
+    # A TLS-inspecting proxy re-signs HTTPS with an internal root CA that
+    # Python's default trust store doesn't recognise. Point CA_BUNDLE_PATH
+    # at the exported corporate root to make httpx trust it.
+    ca_bundle_path: Optional[str] = Field(default=None, alias="CA_BUNDLE_PATH")
+    http_proxy: Optional[str] = Field(default=None, alias="HTTP_PROXY")
+    https_proxy: Optional[str] = Field(default=None, alias="HTTPS_PROXY")
+
     # --- API ---
     api_key: Optional[str] = Field(default=None, alias="API_KEY")
+    # Separate from api_key: rotation installs a password-equivalent
+    # secret and changes service behaviour, so it gets its own credential.
+    # If unset, /admin/session/* refuses to serve (fails closed).
+    admin_api_key: Optional[str] = Field(default=None, alias="ADMIN_API_KEY")
     enable_docs: bool = Field(default=False, alias="ENABLE_DOCS")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     include_debug: bool = Field(default=False, alias="INCLUDE_DEBUG")
 
-    @field_validator("api_key", "linkedin_li_at", "linkedin_jsessionid", mode="before")
+    @field_validator(
+        "api_key",
+        "admin_api_key",
+        "linkedin_li_at",
+        "linkedin_jsessionid",
+        "ca_bundle_path",
+        "http_proxy",
+        "https_proxy",
+        mode="before",
+    )
     @classmethod
     def empty_str_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():

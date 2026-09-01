@@ -139,7 +139,7 @@ async def test_get_variant_via_query_param(client_and_stub):
 
 
 @pytest.mark.asyncio
-async def test_session_expired_returns_401():
+async def test_session_expired_returns_503():
     stub_service = StubProfileService(make_sample_response)
     stub_service.raise_on_fetch(SessionExpiredError("expired"))
     app.dependency_overrides[get_profile_service] = lambda: stub_service
@@ -150,7 +150,12 @@ async def test_session_expired_returns_401():
             json={"url": "https://www.linkedin.com/in/jane-doe"},
         )
     app.dependency_overrides.clear()
-    assert resp.status_code == 401
+    # 503, not 401: the caller's request was valid — it's the service's own
+    # upstream credential that expired, and only an operator can fix it.
+    # A 401 would wrongly imply the caller needs to authenticate.
+    assert resp.status_code == 503
+    assert resp.headers.get("Retry-After")
+    assert resp.json()["operator_action_required"] is True
     assert resp.json()["error"] == "SessionExpiredError"
 
 

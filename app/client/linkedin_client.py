@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from app.client.headers import build_voyager_get_headers
-from app.client.session import LinkedInSession
+from app.client.session import LinkedInSession, _is_auth_redirect
 from app.exceptions import (
     ProfileAccessRestrictedError,
     ProfileNotFoundError,
@@ -48,6 +48,11 @@ _STANDALONE_RATE_LIMIT_MARKERS = (
 
 VOYAGER_MAX_ATTEMPTS = 3
 
+# We follow redirects manually (see LinkedInSession.build_client), so we
+# need our own bound. Legitimate LinkedIn redirects are 1-2 hops (trailing
+# slash, vanity canonicalisation); anything beyond this is a loop.
+MAX_REDIRECT_HOPS = 5
+
 
 def _looks_like_profile_page(response: httpx.Response) -> bool:
     """True when the response is a full authenticated profile document."""
@@ -70,43 +75,138 @@ class LinkedInClient:
     def __init__(self, session: LinkedInSession):
         self._session = session
         self._client: httpx.AsyncClient | None = None
+        self._client_revision: int = -1
         self._cached_decoration_version: int | None = None
 
     async def start(self) -> None:
-        if self._client is None:
+        await self._ensure_client()
+
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        """
+        Return a client whose cookie jar matches the session's CURRENT
+        credential.
+
+        httpx.AsyncClient copies cookies at construction time, so a client
+        built before a rotation would keep sending the dead cookie until
+        the process restarted — defeating the whole point of hot rotation.
+        Comparing the session's revision counter against ours makes
+        replacement automatic and costs one integer compare per request.
+        """
+        if self._client is None or self._client_revision != self._session.revision:
+            if self._client is not None:
+                logger.info(
+                    "Session revision changed (%s -> %s); rebuilding HTTP client.",
+                    self._client_revision,
+                    self._session.revision,
+                )
+                await self._client.aclose()
             self._client = self._session.build_client()
+            self._client_revision = self._session.revision
+        return self._client
 
     async def close(self) -> None:
         if self._client is not None:
             await self._client.aclose()
             self._client = None
+            self._client_revision = -1
+
+    def _fail_session(self, reason: str) -> None:
+        """
+        Mark the credential dead and raise.
+
+        mark_invalid() reports whether this was the transition into
+        INVALID, which callers can use to alert exactly once.
+        """
+        self._session.mark_invalid(reason)
+        raise SessionExpiredError(reason)
+
+    def _guard_usable(self) -> None:
+        """
+        Short-circuit when we already know the credential is dead.
+
+        Besides answering the caller faster, this stops us repeatedly
+        hitting LinkedIn with requests that we know will bounce to /login.
+        """
+        if not self._session.is_usable:
+            raise SessionExpiredError(
+                "The LinkedIn session credential is known to be invalid. "
+                "An operator must rotate it (POST /admin/session/rotate) "
+                "before profile requests can succeed."
+            )
+
+    async def _get_following_redirects(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> httpx.Response:
+        """
+        Issue a GET, following only *benign* redirects.
+
+        This is the fix for the production 500. Previously the client ran
+        with follow_redirects=True, so an expired cookie caused
+        /in/<vanity>/ -> /login -> /in/<vanity>/ -> ... and httpx raised
+        TooManyRedirects inside .get(), before _check_auth_redirect could
+        classify anything. Inspecting each hop's Location header lets us
+        detect the auth bounce on the very first redirect.
+        """
+        client = await self._ensure_client()
+        current = url
+
+        for _ in range(MAX_REDIRECT_HOPS):
+            response = await client.get(current, headers=headers)
+            self._session.apply_response_cookies(response)
+
+            if not (300 <= response.status_code < 400):
+                return response
+
+            location = response.headers.get("location", "")
+            if _is_auth_redirect(location):
+                self._fail_session(
+                    f"LinkedIn redirected to an authentication page "
+                    f"({location or 'unknown location'}) — session expired or invalid."
+                )
+
+            if not location:
+                return response
+
+            current = str(httpx.URL(str(response.url)).join(location))
+            logger.debug("Following benign redirect to %s", current)
+
+        # Every hop was non-auth yet we never landed. Treat as expiry:
+        # a redirect loop is overwhelmingly a dead-session symptom, and
+        # this is the safety net that keeps it from becoming a 500.
+        self._fail_session("LinkedIn redirected repeatedly — session expired or invalid.")
+        raise AssertionError("unreachable")  # pragma: no cover
 
     async def fetch_profile_html(self, vanity: str) -> str:
-        if self._client is None:
-            await self.start()
+        self._guard_usable()
 
-        assert self._client is not None
-        response = await self._client.get(f"/in/{vanity}/")
-        self._session.apply_response_cookies(response)
+        response = await self._get_following_redirects(f"/in/{vanity}/")
 
         self._check_auth_redirect(response)
         self._check_status_and_body(response)
+
+        # A successful authenticated fetch is the strongest evidence the
+        # credential is healthy — record it so a recovered session flips
+        # back out of INVALID without waiting for a separate probe.
+        self._session.mark_valid()
         return response.text
 
     def _check_auth_redirect(self, response: httpx.Response) -> None:
         final_url = str(response.url).lower()
         if any(marker in final_url for marker in _LOGIN_PATHS):
-            raise SessionExpiredError(
-                "LinkedIn redirected to login/checkpoint — session expired or invalid."
+            self._fail_session(
+                "LinkedIn served a login/checkpoint page — session expired or invalid."
             )
         body_lower = response.text.lower()
         if "login-form" in body_lower or "sign in to linkedin" in body_lower:
-            raise SessionExpiredError(
-                "LinkedIn redirected to login/checkpoint — session expired or invalid."
+            self._fail_session(
+                "LinkedIn served a login form — session expired or invalid."
             )
         if "checkpoint" in body_lower and "challenge" in body_lower:
-            raise SessionExpiredError(
-                "LinkedIn redirected to login/checkpoint — session expired or invalid."
+            self._fail_session(
+                "LinkedIn served a security checkpoint — session requires re-authentication."
             )
 
     def _check_status_and_body(self, response: httpx.Response) -> None:
@@ -114,9 +214,11 @@ class LinkedInClient:
 
         if response.status_code == 999:
             if "authwall" in body_lower:
-                raise SessionExpiredError(
+                self._fail_session(
                     "LinkedIn returned HTTP 999 with auth wall — session expired or invalid."
                 )
+            # Bare 999 is throttling, not proof of a dead cookie — do not
+            # mark the credential invalid here.
             raise RateLimitedError("LinkedIn returned HTTP 999 (anti-bot / rate limit).")
 
         if response.status_code == 429:
@@ -155,10 +257,8 @@ class LinkedInClient:
         html: str | None = None,
     ) -> dict[str, Any]:
         """Fetch experience/education/skills via Voyager FullProfileWithEntities."""
-        if self._client is None:
-            await self.start()
+        self._guard_usable()
 
-        assert self._client is not None
         candidates = build_decoration_candidates(html, self._cached_decoration_version)
         last_ok_payload: dict[str, Any] | None = None
         auth_failed = False
@@ -207,11 +307,10 @@ class LinkedInClient:
         for attempt in range(1, VOYAGER_MAX_ATTEMPTS + 1):
             response = await self._request_voyager_profile(vanity, decoration)
             last_response = response
-            self._session.apply_response_cookies(response)
             self._check_auth_redirect(response)
 
             if response.status_code in (401, 403):
-                raise SessionExpiredError("LinkedIn rejected Voyager profile request (auth).")
+                self._fail_session("LinkedIn rejected Voyager profile request (auth).")
 
             if response.status_code == 404:
                 raise ProfileNotFoundError("Voyager profile not found.")
@@ -253,12 +352,11 @@ class LinkedInClient:
         vanity: str,
         decoration: str,
     ) -> httpx.Response:
-        assert self._client is not None
         headers = build_voyager_get_headers(
             vanity=vanity,
             csrf_token=self._session.csrf_token,
         )
-        return await self._client.get(
+        return await self._get_following_redirects(
             voyager_profile_url(vanity, profile_decoration=decoration),
             headers=headers,
         )

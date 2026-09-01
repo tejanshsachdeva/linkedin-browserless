@@ -8,7 +8,7 @@ from app.core.config import get_settings
 from app.core.logging_config import configure_logging
 from app.dependencies import shutdown_clients
 from app.middleware.error_handler import register_error_handlers
-from app.routers import health, profile
+from app.routers import admin_session, health, profile
 
 
 def _docs_enabled() -> bool:
@@ -51,6 +51,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(profile.router)
+app.include_router(admin_session.router)
 
 
 @app.get("/", include_in_schema=False)
