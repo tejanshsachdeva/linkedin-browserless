@@ -27,6 +27,24 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = Field(default=3600, alias="CACHE_TTL_SECONDS")
     redis_url: Optional[str] = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
 
+    # --- Automatic re-authentication (best-effort, OFF by default) ---
+    # Attempts ONE ordinary username/password login when li_at expires.
+    # Stops immediately if LinkedIn requires MFA/CAPTCHA/checkpoint — it
+    # never tries to bypass those. Off by default because failed logins
+    # carry more account risk than failed scrapes.
+    reauth_enabled: bool = Field(default=False, alias="REAUTH_ENABLED")
+    linkedin_email: Optional[str] = Field(default=None, alias="LINKEDIN_EMAIL")
+    linkedin_password: Optional[str] = Field(default=None, alias="LINKEDIN_PASSWORD")
+    # Circuit breaker: one attempt, then wait. Prevents an outage turning
+    # into a login loop that could lock the account.
+    reauth_cooldown_seconds: int = Field(default=3600, alias="REAUTH_COOLDOWN_SECONDS")
+    reauth_max_attempts_per_day: int = Field(default=3, alias="REAUTH_MAX_ATTEMPTS_PER_DAY")
+
+    # --- Alerting ---
+    alert_webhook_url: Optional[str] = Field(default=None, alias="ALERT_WEBHOOK_URL")
+    service_name: str = Field(default="linkedin-profile-api", alias="SERVICE_NAME")
+    rotation_endpoint_hint: Optional[str] = Field(default=None, alias="ROTATION_ENDPOINT_HINT")
+
     # --- Corporate network (optional) ---
     # A TLS-inspecting proxy re-signs HTTPS with an internal root CA that
     # Python's default trust store doesn't recognise. Point CA_BUNDLE_PATH
@@ -50,6 +68,10 @@ class Settings(BaseSettings):
         "admin_api_key",
         "linkedin_li_at",
         "linkedin_jsessionid",
+        "linkedin_email",
+        "linkedin_password",
+        "alert_webhook_url",
+        "rotation_endpoint_hint",
         "ca_bundle_path",
         "http_proxy",
         "https_proxy",

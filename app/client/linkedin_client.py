@@ -72,8 +72,10 @@ def _looks_like_profile_page(response: httpx.Response) -> bool:
 
 
 class LinkedInClient:
-    def __init__(self, session: LinkedInSession):
+    def __init__(self, session: LinkedInSession, alerter=None, recovery=None):
         self._session = session
+        self._alerter = alerter
+        self._recovery = recovery
         self._client: httpx.AsyncClient | None = None
         self._client_revision: int = -1
         self._cached_decoration_version: int | None = None
@@ -114,11 +116,21 @@ class LinkedInClient:
         """
         Mark the credential dead and raise.
 
-        mark_invalid() reports whether this was the transition into
-        INVALID, which callers can use to alert exactly once.
+        Records whether this was the *transition* into INVALID so the
+        caller can alert exactly once rather than on every failed request.
         """
-        self._session.mark_invalid(reason)
+        became_invalid = self._session.mark_invalid(reason)
+        self._pending_alert = reason if became_invalid else None
         raise SessionExpiredError(reason)
+
+    async def _flush_alert(self) -> None:
+        reason = getattr(self, "_pending_alert", None)
+        if reason and self._alerter is not None:
+            self._pending_alert = None
+            try:
+                await self._alerter.credential_invalid(reason)
+            except Exception as exc:  # noqa: BLE001 - alerting must not break the path
+                logger.warning("Alert delivery failed: %s", exc)
 
     def _guard_usable(self) -> None:
         """
@@ -180,6 +192,26 @@ class LinkedInClient:
         raise AssertionError("unreachable")  # pragma: no cover
 
     async def fetch_profile_html(self, vanity: str) -> str:
+        try:
+            return await self._fetch_profile_html_once(vanity)
+        except SessionExpiredError:
+            await self._flush_alert()
+
+            # Best-effort automatic recovery: exactly ONE attempt, gated by
+            # the circuit breaker in SessionRecoveryService. If LinkedIn
+            # demands verification, recovery stops there and we surface the
+            # 503 — we never try to satisfy a challenge.
+            if self._recovery is None:
+                raise
+
+            outcome = await self._recovery.attempt_recovery()
+            if not outcome.get("recovered"):
+                raise
+
+            logger.info("Session auto-recovered; retrying %s once.", vanity)
+            return await self._fetch_profile_html_once(vanity)
+
+    async def _fetch_profile_html_once(self, vanity: str) -> str:
         self._guard_usable()
 
         response = await self._get_following_redirects(f"/in/{vanity}/")

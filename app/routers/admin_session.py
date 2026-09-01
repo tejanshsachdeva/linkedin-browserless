@@ -30,7 +30,8 @@ from pydantic import BaseModel, Field
 
 from app.client.session import LinkedInSession
 from app.core.config import get_settings
-from app.dependencies import get_linkedin_session
+from app.dependencies import get_linkedin_session, get_recovery_service
+from app.services.session_recovery import SessionRecoveryService
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +79,40 @@ async def require_admin_key(x_admin_key: str | None = Header(default=None)) -> N
 
 
 @router.get("", dependencies=[Depends(require_admin_key)])
-async def session_status(session: LinkedInSession = Depends(get_linkedin_session)):
-    """Full credential state. Never returns the cookie value itself."""
-    return session.snapshot()
+async def session_status(
+    session: LinkedInSession = Depends(get_linkedin_session),
+    recovery: SessionRecoveryService = Depends(get_recovery_service),
+):
+    """Full credential + recovery state. Never returns the cookie value."""
+    return {**session.snapshot(), "recovery": recovery.status()}
+
+
+@router.post("/recover", dependencies=[Depends(require_admin_key)])
+async def trigger_recovery(
+    force: bool = False,
+    recovery: SessionRecoveryService = Depends(get_recovery_service),
+):
+    """
+    Manually trigger one automatic re-authentication attempt.
+
+    `force=true` bypasses the cooldown and daily cap — use sparingly, and
+    never in a loop: repeated automated logins are what put the account at
+    risk of lockout. It does NOT bypass a challenge; if LinkedIn wants
+    human verification, the attempt still stops there.
+    """
+    return await recovery.attempt_recovery(force=force)
+
+
+@router.post("/breaker/reset", dependencies=[Depends(require_admin_key)])
+async def reset_breaker(recovery: SessionRecoveryService = Depends(get_recovery_service)):
+    """
+    Close the recovery circuit breaker.
+
+    Use after completing a LinkedIn challenge manually in a browser, so
+    the service is allowed to attempt automatic recovery again later.
+    """
+    recovery.reset_breaker()
+    return recovery.status()
 
 
 @router.post("/probe", dependencies=[Depends(require_admin_key)])
